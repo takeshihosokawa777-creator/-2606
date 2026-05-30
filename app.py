@@ -31,14 +31,16 @@ def get_font(size):
     except: pass
     return ImageFont.load_default()
 
-# --- 日本語の自動改行関数 (右端の切れ防止) ---
+# --- 最新のPillow(v10+)に対応した改行関数 (getsizeの代わりにgetbboxを使用) ---
 def wrap_text(text, font, max_width):
     lines = []
     for line in text.splitlines():
         current_line = ""
         for char in line:
             test_line = current_line + char
-            w, _ = font.getsize(test_line)
+            # getbboxを使って文字の幅を計算
+            bbox = font.getbbox(test_line)
+            w = bbox[2] - bbox[0]
             if w <= max_width:
                 current_line = test_line
             else:
@@ -62,7 +64,7 @@ def create_graph(rate, monthly):
     plt.plot(months/12, assets_series, color="#FF4500", linewidth=7, label="資産合計")
     plt.plot(months/12, [monthly * m for m in months], color="#4169E1", linewidth=4, linestyle="--", label="投資元金")
     
-    # グラフ上の吹き出し
+    # グラフ上の吹き出し（金額ラベル）
     plt.annotate(f'資産合計\n{int(final_assets//10000):,}万円', xy=(30, final_assets), xytext=(22, final_assets*0.85),
                  arrowprops=dict(facecolor='red', shrink=0.05), fontproperties=prop, fontsize=14, weight='bold')
     plt.annotate(f'投資元金\n{int(principal_val//10000):,}万円', xy=(30, principal_val), xytext=(22, principal_val*0.4),
@@ -76,7 +78,7 @@ def create_graph(rate, monthly):
     return Image.open(buf)
 
 # --- メイン画面 ---
-st.title("📄 細川様モデル：FPチラシ生成システム（完全版）")
+st.title("📄 細川様モデル：FPチラシ生成システム（エラー修正・完全版）")
 
 with st.sidebar:
     st.header("👤 掲載情報")
@@ -119,13 +121,14 @@ def create_pages():
     
     story = (
         "過去20年間を振り返れば、ITバブル、リーマンショック、コロナショックと多くの暴落がありましたが、長期投資はそれらを乗り越える力があります。\n\n"
-        f"私（細川）は自らの運用実績を通じ、長期利回りが7.5%へと収斂していく事実を目の当たりにしました。毎月3.3万円の積立が、30年後には{final_man}万円、つまり元本から{profit_man}万円以上の利益を生み出す。この実体験に基づいた確信が私の原動力です。\n\n"
+        f"私（細川）は自らの運用実績を通じ、長期利回りが7.5%へと収斂していく事実を目の当たりにしました。毎月3.3万円の積立が、30年後には{final_man}万円、つまり元本から{profit_man}万円以上の純利益を生み出す。この実体験に基づいた確信が私の原動力です。\n\n"
         "これぞ複利の効果であり、「複利が起こす奇跡の価値」と呼ばれるものです。正しいつみたてを知り、新NISAやiDeCoを賢く活用することで、家族が安心して暮らせる未来を共に作っていきましょう。"
     )
     d2.multiline_text((SAFE_MARGIN, 500), wrap_text(story, f(85), max_w), font=f(85), fill=BLACK, spacing=60)
 
-    # プロフィールエリア（重なり防止のため独立配置）
+    # プロフィールエリア（下部に配置を整理）
     d2.rectangle([0, 2450, WIDTH, HEIGHT], fill=(245, 245, 245))
+    
     if user_photo:
         photo = ImageOps.fit(Image.open(user_photo).convert("RGBA"), (750, 750), centering=(0.5, 0.5))
         mask = Image.new("L", (750, 750), 0)
@@ -133,9 +136,9 @@ def create_pages():
         photo.putalpha(mask)
         p2.paste(photo, (SAFE_MARGIN, 2550), photo)
     
-    # テキスト（中央付近に固定）
-    d2.text((1050, 2750), title, font=f(85), fill=BLACK)
-    d2.text((1050, 2950), name, font=f(180), fill=BLACK)
+    # テキスト（写真の右側に配置し、重なりを防止）
+    d2.text((1100, 2750), title, font=f(85), fill=BLACK)
+    d2.text((1100, 2950), f"{name}", font=f(180), fill=BLACK)
     
     if qr_code:
         qr = Image.open(qr_code).resize((550, 550))
@@ -146,11 +149,11 @@ def create_pages():
     p1.save(pdf_buf, format="PDF", save_all=True, append_images=[p2], resolution=300.0)
     return pdf_buf.getvalue()
 
-if st.button("🚀 この内容でチラシを完成させる"):
+if st.button("🚀 細川様モデル：A4両面チラシを生成する"):
     if not user_photo or not qr_code:
-        st.warning("写真とQRコードが必要です")
+        st.warning("写真とQRコードをアップロードしてください。")
     else:
         with st.spinner("高品質PDFを生成中..."):
             pdf = create_pages()
             st.success("✅ 細川様オリジナル両面チラシが完成しました！")
-            st.download_button("📥 A4両面PDFを保存", pdf, f"FP_Hosokawa_Final.pdf", "application/pdf")
+            st.download_button("📥 両面PDFを保存", pdf, f"FP_Hosokawa_Final_Report.pdf", "application/pdf")
