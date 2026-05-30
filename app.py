@@ -2,32 +2,41 @@ import streamlit as st
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import io
 import os
+import urllib.request
 
 # --- ページ設定 ---
 st.set_page_config(page_title="FPチラシ作成システム", layout="centered")
 
-# --- 設定：A4サイズ (300dpi) ---
+# --- 設定：A4サイズ ---
 WIDTH, HEIGHT = 2480, 3508 
-WHITE = (255, 255, 255)
-GOLD = (184, 134, 11) 
-BLACK = (30, 30, 30)
-RED = (220, 0, 0)
-PINK = (255, 0, 127)
+WHITE, GOLD, BLACK, RED, PINK = (255, 255, 255), (184, 134, 11), (30, 30, 30), (220, 0, 0), (255, 0, 127)
 
-# --- フォント読み込み（ここを強化しました） ---
+# --- フォントを自動で準備する関数 ---
+@st.cache_resource
+def get_font_path():
+    # Streamlit Cloud上で確実に動く日本語フォントのパス
+    font_filename = "NotoSansJP-Bold.ttf"
+    # もしファイルがない、または壊れている場合に備えて自動ダウンロード
+    if not os.path.exists(font_filename) or os.path.getsize(font_filename) < 1000:
+        url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/Variable/OTC/NotoSansCJKjp-Bold.otf"
+        try:
+            with st.spinner("初回起動のためフォントを準備しています（数十秒かかります）..."):
+                urllib.request.urlretrieve(url, font_filename)
+        except:
+            return None # 失敗した場合はNoneを返す
+    return font_filename
+
 def get_font(size):
-    # GitHub上のファイル名を指定（大文字小文字に注意！）
-    font_path = "NotoSansJP-Bold.ttf" 
-    
-    if os.path.exists(font_path):
-        return ImageFont.truetype(font_path, size)
-    else:
-        # ファイルが見つからない場合、画面に警告を出して標準フォントを巨大化して返す
-        st.error(f"フォントファイル '{font_path}' が見つかりません。GitHubにアップロードされているか確認してください。")
-        return ImageFont.load_default()
+    path = get_font_path()
+    try:
+        if path:
+            return ImageFont.truetype(path, size)
+    except:
+        pass
+    return ImageFont.load_default()
 
 # --- メイン画面 ---
-st.title("🚀 本格FPチラシ自動生成（最終調整版）")
+st.title("🚀 本格FPチラシ自動生成システム")
 
 with st.sidebar:
     st.header("👤 プロフィール設定")
@@ -39,62 +48,53 @@ with st.sidebar:
 st.header("📈 シミュレーション設定")
 rate = st.select_slider("想定利回り (%)", options=[7.5, 8.0, 8.5, 9.0, 10.0, 11.0, 12.0, 13.0], value=7.5)
 
-# 計算ロジック
-monthly = 33000
-years = 30
+# 資産計算
+monthly, years = 33000, 30
 r = (rate / 100) / 12
 n = years * 12
-final_amount = int(monthly * ((1 + r)**n - 1) / r)
-final_amount_man = final_amount // 10000
+final_amount_man = int(monthly * ((1 + r)**n - 1) / r) // 10000
 
 def create_flyer():
     canvas = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     draw = ImageDraw.Draw(canvas)
+    f = get_font
 
     # 1. ヘッダー
     draw.rectangle([0, 0, WIDTH, 500], fill=GOLD)
-    draw.text((WIDTH//2, 180), "節約・貯蓄・NISA・投資・保険", font=get_font(100), fill=WHITE, anchor="mm")
-    draw.text((WIDTH//2, 350), "日本人の９割が知らない", font=get_font(160), fill=WHITE, anchor="mm")
+    draw.text((WIDTH//2, 180), "節約・貯蓄・NISA・投資・保険", font=f(100), fill=WHITE, anchor="mm")
+    draw.text((WIDTH//2, 350), "日本人の９割が知らない", font=f(160), fill=WHITE, anchor="mm")
 
-    # 2. メインタイトル（サイズを調整）
-    draw.text((WIDTH//2, 800), "お金の", font=get_font(380), fill=BLACK, anchor="mm")
-    draw.text((WIDTH//2, 1250), "超基本", font=get_font(650), fill=BLACK, anchor="mm")
+    # 2. タイトル
+    draw.text((WIDTH//2, 800), "お金の", font=f(380), fill=BLACK, anchor="mm")
+    draw.text((WIDTH//2, 1250), "超基本", font=f(650), fill=BLACK, anchor="mm")
     draw.rectangle([WIDTH//2 - 600, 1500, WIDTH//2 + 600, 1530], fill=GOLD)
 
-    # 3. インパクトセクション（ピンク帯）
+    # 3. ピンク帯
     draw.rectangle([0, 1700, WIDTH, 2050], fill=PINK)
-    catch_text = f"つみたてだけで老後 {final_amount_man}万円 を作ります！"
-    draw.text((WIDTH//2, 1875), catch_text, font=get_font(130), fill=WHITE, anchor="mm")
+    draw.text((WIDTH//2, 1875), f"つみたてだけで老後 {final_amount_man}万円 を作ります！", font=f(130), fill=WHITE, anchor="mm")
 
-    # 4. シミュレーション詳細（さらに大きく）
-    draw.text((WIDTH//2, 2200), f"【シミュレーション結果】", font=get_font(110), fill=BLACK, anchor="mm")
-    res_text = f"毎月3.3万円を {rate}% で30年間運用"
-    draw.text((WIDTH//2, 2380), res_text, font=get_font(90), fill=BLACK, anchor="mm")
-    
-    amount_text = f"資産額：約 {final_amount_man:,} 万円"
-    draw.text((WIDTH//2, 2650), amount_text, font=get_font(280), fill=RED, anchor="mm")
+    # 4. シミュレーション
+    draw.text((WIDTH//2, 2200), "【シミュレーション結果】", font=f(110), fill=BLACK, anchor="mm")
+    draw.text((WIDTH//2, 2380), f"毎月3.3万円を {rate}% で30年間運用", font=f(90), fill=BLACK, anchor="mm")
+    draw.text((WIDTH//2, 2650), f"資産額：約 {final_amount_man:,} 万円", font=f(280), fill=RED, anchor="mm")
 
-    # 5. 写真とプロフィール（位置を微調整）
+    # 5. プロフィール
     if user_photo:
-        photo_img = Image.open(user_photo).convert("RGBA").resize((700, 700))
+        photo = Image.open(user_photo).convert("RGBA").resize((700, 700))
         mask = Image.new("L", (700, 700), 0)
-        mask_draw = ImageDraw.Draw(mask)
-        mask_draw.ellipse((0, 0, 700, 700), fill=255)
-        photo_round = ImageOps.fit(photo_img, (700, 700), centering=(0.5, 0.5))
+        ImageDraw.Draw(mask).ellipse((0, 0, 700, 700), fill=255)
+        photo_round = ImageOps.fit(photo, (700, 700), centering=(0.5, 0.5))
         photo_round.putalpha(mask)
         canvas.paste(photo_round, (250, 2650), photo_round)
 
-    # QRコード
     if qr_code:
-        qr_img = Image.open(qr_code).resize((500, 500))
-        canvas.paste(qr_img, (WIDTH - 750, 2700))
-        draw.text((WIDTH - 500, 3250), "公式LINEはこちら", font=get_font(70), fill=BLACK, anchor="mm")
+        qr = Image.open(qr_code).resize((500, 500))
+        canvas.paste(qr, (WIDTH - 750, 2700))
+        draw.text((WIDTH - 500, 3250), "公式LINEはこちら", font=f(70), fill=BLACK, anchor="mm")
 
-    # 名前
-    draw.text((WIDTH//2 + 100, 2950), title, font=get_font(80), fill=BLACK, anchor="mm")
-    draw.text((WIDTH//2 + 100, 3150), f"{name}", font=get_font(160), fill=BLACK, anchor="mm")
+    draw.text((WIDTH//2 + 100, 2950), title, font=f(80), fill=BLACK, anchor="mm")
+    draw.text((WIDTH//2 + 100, 3150), f"{name}", font=f(160), fill=BLACK, anchor="mm")
 
-    # 6. フッター
     draw.rectangle([0, HEIGHT-120, WIDTH, HEIGHT], fill=GOLD)
 
     pdf_buffer = io.BytesIO()
@@ -107,10 +107,5 @@ if st.button("🚀 この内容でチラシを完成させる"):
     else:
         with st.spinner("プロ級PDFを生成中..."):
             pdf_data = create_flyer()
-            st.success("✅ チラシが完成しました！")
-            st.download_button(
-                label="📥 A4チラシPDFをダウンロード",
-                data=pdf_data,
-                file_name=f"FPチラシ_{name}.pdf",
-                mime="application/pdf"
-            )
+            st.success("✅ 完成しました！")
+            st.download_button(label="📥 ダウンロード", data=pdf_data, file_name=f"FP_{name}.pdf", mime="application/pdf")
