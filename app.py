@@ -9,8 +9,8 @@ import numpy as np
 
 # --- 設定：A4サイズ (300dpi) ---
 WIDTH, HEIGHT = 2480, 3508 
-SAFE_L = 320  # 左余白をさらに拡大して切れを防止
-SAFE_R = 2160 # 右限界
+SAFE_L = 350  # 左余白を十分に確保
+SAFE_R = 2130 # 右限界
 CONTENT_W = SAFE_R - SAFE_L
 
 WHITE, GOLD, BLACK, RED, PINK = (255, 255, 255), (184, 134, 11), (30, 30, 30), (220, 0, 0), (255, 0, 127)
@@ -34,7 +34,7 @@ def get_font(size):
     except: pass
     return ImageFont.load_default()
 
-# --- 改行関数 (Pillow最新版対応) ---
+# --- 改行関数 (右端切れ防止) ---
 def wrap_text(text, font, max_width):
     lines = []
     for line in text.splitlines():
@@ -80,13 +80,13 @@ def create_graph(rate, monthly):
     plt.close()
     return Image.open(buf)
 
-# --- ページ生成ロジック ---
+# --- ページ生成 ---
 def create_pages(name, title, user_photo, qr_code, rate):
     f = get_font
     f_dyn = int(33000 * (((rate/100/12) + 1)**360 - 1) / (rate/100/12)) // 10000
     p_dyn = f_dyn - 1188
 
-    # --- PAGE 1 (表面) ---
+    # --- PAGE 1 ---
     p1 = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     d1 = ImageDraw.Draw(p1)
     d1.rectangle([0, 0, WIDTH, 750], fill=GOLD)
@@ -96,28 +96,29 @@ def create_pages(name, title, user_photo, qr_code, rate):
     
     p1.paste(create_graph(rate, 33000).resize((2000, 1100)), (WIDTH//2 - 1000, 1300))
     
-    # 1枚目中央：左切れ防止のためフォントを微調整
     msg_main = f"毎月3.3万円の積立でも、30年後には {f_dyn:,}万円に。\n投資元本1,188万円に対し、運用益だけで {p_dyn:,}万円以上 になります！"
     d1.multiline_text((WIDTH//2, 2600), wrap_text(msg_main, f(78), CONTENT_W), font=f(78), fill=BLACK, anchor="mm", align="center", spacing=35)
 
     d1.rectangle([0, 2850, WIDTH, 3200], fill=PINK)
     d1.text((WIDTH//2, 3025), f"つみたてだけで老後 {f_dyn}万円 を作れます！", font=f(125), fill=WHITE, anchor="mm")
-    d1.text((WIDTH//2, 3400), "細川さんの運用実績から、利回りが7.5%に収斂するという確信を得て、このサービスを開始しました。", font=f(70), fill=BLACK, anchor="mm")
+    
+    # 1枚目下部：自動改行を適用
+    h_info = f"{name}さんの運用実績から、利回りが7.5%に収斂するという確信を得て、このサービスを開始しました。"
+    d1.multiline_text((WIDTH//2, 3400), wrap_text(h_info, f(70), CONTENT_W), font=f(70), fill=BLACK, anchor="mm", align="center")
 
-    # --- PAGE 2 (裏面) ---
+    # --- PAGE 2 ---
     p2 = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     d2 = ImageDraw.Draw(p2)
     d2.text((WIDTH//2, 400), "なぜ今、資産形成が必要なのか？", font=f(120), fill=GOLD, anchor="mm")
     
-    # 2枚目本文：最後の一文まで入るようにサイズを調整 (85->75)
     story = (
         "過去20年間を振り返れば、ITバブル、リーマンショック、コロナショックと多くの暴落がありましたが、長期投資はそれらを乗り越える力があります。\n\n"
         "私は自らの運用実績を通じ、長期利回りが7.5%へと収斂していく事実を目の当たりにしました。毎月3.3万円の積立が、30年後には4446万円、つまり元本から3258万円以上の純利益を生み出す。この実体験に基づいた確信が私の原動力です。\n\n"
         "これぞ複利の効果であり、「複利が起こす奇跡の価値」と呼ばれるものです。正しいつみたてを知り、新NISAやiDeCoを賢く活用することで、家族が安心して暮らせる未来を共に作っていきましょう。"
     )
-    d2.multiline_text((SAFE_L, 700), wrap_text(story, f(75), CONTENT_W), font=f(75), fill=BLACK, spacing=48)
+    d2.multiline_text((SAFE_L, 700), wrap_text(story, f(75), CONTENT_W), font=f(75), fill=BLACK, spacing=45)
 
-    # プロフィールエリア (絶対重ならない配置)
+    # プロフィールエリア
     d2.rectangle([0, 2550, WIDTH, HEIGHT], fill=(245, 245, 245))
     if user_photo:
         photo = ImageOps.fit(Image.open(user_photo).convert("RGBA"), (700, 700), centering=(0.5, 0.5))
@@ -126,16 +127,20 @@ def create_pages(name, title, user_photo, qr_code, rate):
         photo.putalpha(mask)
         p2.paste(photo, (SAFE_L, 2650), photo)
     
-    # テキスト (写真の右に大きく離して配置 X=1100)
-    d2.text((1100, 2800), title, font=f(70), fill=BLACK)
-    d2.text((1100, 3000), name, font=f(180), fill=BLACK)
+    # 肩書き：2行に分けて重なりを防止
+    if "ファイナンシャルプランナー" in title:
+        d2.text((1050, 2750), "ファイナンシャル", font=f(70), fill=BLACK)
+        d2.text((1050, 2835), "プランナー", font=f(70), fill=BLACK)
+    else:
+        d2.text((1050, 2750), title, font=f(70), fill=BLACK)
     
-    # QRコード (右端 X=1900 側に寄せて文字切れを防止)
+    d2.text((1050, 3000), name, font=f(180), fill=BLACK)
+    
     if qr_code:
         qr = Image.open(qr_code).resize((450, 450))
-        qr_x = 1900 
+        qr_x = 1880 # 少し左に寄せて文字切れ防止
         p2.paste(qr, (qr_x, 2750))
-        d2.text((qr_x + 225, 3250), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
+        d2.text((qr_x + 225, 3300), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
 
     pdf_buf = io.BytesIO()
     p1.save(pdf_buf, format="PDF", save_all=True, append_images=[p2], resolution=300.0)
@@ -157,7 +162,6 @@ if st.button("🚀 チラシを生成する"):
     if not input_photo or not input_qr:
         st.warning("写真とQRコードをセットしてください")
     else:
-        with st.spinner("高品質な両面チラシを生成中..."):
-            pdf = create_pages(input_name, input_title, input_photo, input_qr, input_rate)
-            st.success("✅ 全文表示、左右切れ、重なりの全修正が完了しました！")
-            st.download_button("📥 完成版PDFを保存", pdf, f"FP_Flyer_Hosokawa_Complete.pdf", "application/pdf")
+        pdf = create_pages(input_name, input_title, input_photo, input_qr, input_rate)
+        st.success("✅ 文章の切れ、重なりを全て解消しました！これで完成です。")
+        st.download_button("📥 完成版PDFを保存", pdf, f"FP_Flyer_{input_name}_Final.pdf", "application/pdf")
