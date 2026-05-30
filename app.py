@@ -76,7 +76,7 @@ def create_graph(rate, monthly):
     return Image.open(buf)
 
 # --- アプリ画面 ---
-st.title("📄 FPチラシ生成：最終確定版")
+st.title("📄 FPチラシ生成：最終確定版（修正済）")
 
 with st.sidebar:
     st.header("👤 掲載情報")
@@ -96,25 +96,25 @@ def create_pages():
     p1 = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     d1 = ImageDraw.Draw(p1)
     
-    # ヘッダー (上端の余裕をさらに確保)
-    d1.rectangle([0, 0, WIDTH, 700], fill=GOLD)
+    # ヘッダー (上端の余裕を確保)
+    d1.rectangle([0, 0, WIDTH, 750], fill=GOLD)
     d1.text((WIDTH//2, 300), "節約・貯蓄・NISA・投資・保険", font=f(100), fill=WHITE, anchor="mm")
     d1.text((WIDTH//2, 500), "日本人の９割が知らない", font=f(150), fill=WHITE, anchor="mm")
     
-    # タイトル (切れ防止のためサイズをさらに調整)
-    d1.text((WIDTH//2, 950), "お金の超基本", font=f(350), fill=BLACK, anchor="mm")
+    # タイトル (切れ防止のためサイズ調整)
+    d1.text((WIDTH//2, 1000), "お金の超基本", font=f(350), fill=BLACK, anchor="mm")
     
-    # グラフ
+    # グラフ (位置を調整)
     graph = create_graph(rate, 33000).resize((2000, 1200))
-    p1.paste(graph, (WIDTH//2 - 1000, 1200))
+    p1.paste(graph, (WIDTH//2 - 1000, 1250))
     
     # 説明文
     msg1 = f"毎月3.3万円の積立でも、30年後には {final_man:,}万円 に。\n投資元本1,188万円に対し、運用益だけで {profit_man:,}万円以上 になります！"
-    d1.multiline_text((WIDTH//2, 2550), wrap_text(msg1, f(85), CONTENT_W), font=f(85), fill=BLACK, anchor="mm", align="center", spacing=30)
+    d1.multiline_text((WIDTH//2, 2600), wrap_text(msg1, f(85), CONTENT_W), font=f(85), fill=BLACK, anchor="mm", align="center", spacing=30)
 
     # ピンクの帯
-    d1.rectangle([0, 2800, WIDTH, 3150], fill=PINK)
-    d1.text((WIDTH//2, 2975), f"つみたてだけで老後 {final_man}万円 を作れます！", font=f(125), fill=WHITE, anchor="mm")
+    d1.rectangle([0, 2850, WIDTH, 3200], fill=PINK)
+    d1.text((WIDTH//2, 3025), f"つみたてだけで老後 {final_man}万円 を作れます！", font=f(125), fill=WHITE, anchor="mm")
     
     # 1P最下部 (細川さん に修正)
     h_info = "細川さんの運用実績から、利回りが7.5%に収斂するという確信を得て、このサービスを開始しました。"
@@ -125,15 +125,16 @@ def create_pages():
     d2 = ImageDraw.Draw(p2)
     d2.text((WIDTH//2, 400), "なぜ今、資産形成が必要なのか？", font=f(120), fill=GOLD, anchor="mm")
     
-    # 本文 (（細川）を削除)
+    # 本文 (開始位置を上げ、最後の一文まで入るように調整)
     story = (
         "過去20年間を振り返れば、ITバブル、リーマンショック、コロナショックと多くの暴落がありましたが、長期投資はそれらを乗り越える力があります。\n\n"
         f"私は自らの運用実績を通じ、長期利回りが7.5%へと収斂していく事実を目の当たりにしました。毎月3.3万円の積立が、30年後には{final_man}万円、つまり元本から{profit_man}万円以上の純利益を生み出す。この実体験に基づいた確信が私の原動力です。\n\n"
         "これぞ複利の効果であり、「複利が起こす奇跡の価値」と呼ばれるものです。正しいつみたてを知り、新NISAやiDeCoを賢く活用することで、家族が安心して暮らせる未来を共に作っていきましょう。"
     )
-    d2.multiline_text((SAFE_L, 750), wrap_text(story, f(85), CONTENT_W), font=f(85), fill=BLACK, spacing=55)
+    # y=650から開始、行間を少し詰める(55->45)
+    d2.multiline_text((SAFE_L, 650), wrap_text(story, f(85), CONTENT_W), font=f(85), fill=BLACK, spacing=45)
 
-    # プロフィールエリア (重なりを物理的に完全に回避)
+    # プロフィールエリア (2450pxから開始)
     d2.rectangle([0, 2450, WIDTH, HEIGHT], fill=(245, 245, 245))
     
     if user_photo:
@@ -147,12 +148,12 @@ def create_pages():
     d2.text((950, 2750), title, font=f(75), fill=BLACK)
     d2.text((950, 2950), name, font=f(180), fill=BLACK)
     
-    # QRコード (右端 X=2000 側に寄せて重なりを回避)
+    # QRコード (右端 X=2050 側に寄せて重なりを完全に回避)
     if qr_code:
-        qr = Image.open(qr_code).resize((420, 420))
-        qr_x = 2000 
+        qr = Image.open(qr_code).resize((400, 400))
+        qr_x = 2050 
         p2.paste(qr, (qr_x, 2650))
-        d2.text((qr_x + 210, 3150), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
+        d2.text((qr_x + 200, 3120), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
 
     pdf_buf = io.BytesIO()
     p1.save(pdf_buf, format="PDF", save_all=True, append_images=[p2], resolution=300.0)
@@ -164,5 +165,5 @@ if st.button("🚀 最終確定版チラシを生成する"):
     else:
         with st.spinner("プロ品質のチラシを生成中..."):
             pdf = create_pages()
-            st.success("✅ 全ての修正を反映しました。これで完成です！")
+            st.success("✅ 文章の切れを修正し、全ての要素を反映しました。これで完成です！")
             st.download_button("📥 完成した両面PDFを保存", pdf, f"FP_Hosokawa_Final_Complete.pdf", "application/pdf")
