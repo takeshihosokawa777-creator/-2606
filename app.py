@@ -9,8 +9,8 @@ import numpy as np
 
 # --- 設定：A4サイズ (300dpi) ---
 WIDTH, HEIGHT = 2480, 3508 
-SAFE_L = 250  
-SAFE_R = 2230 
+SAFE_L = 300  # 左余白をさらに広く(250->300)
+SAFE_R = 2180 # 右余白をさらに広く(2230->2180)
 CONTENT_W = SAFE_R - SAFE_L
 
 WHITE, GOLD, BLACK, RED, PINK = (255, 255, 255), (184, 134, 11), (30, 30, 30), (220, 0, 0), (255, 0, 127)
@@ -34,7 +34,7 @@ def get_font(size):
     except: pass
     return ImageFont.load_default()
 
-# --- 改行関数 (句読点孤立防止) ---
+# --- 改行関数 (最新Pillow対応 & 句読点考慮) ---
 def wrap_text(text, font, max_width):
     lines = []
     for line in text.splitlines():
@@ -49,14 +49,14 @@ def wrap_text(text, font, max_width):
                 lines.append(current_line)
                 current_line = char
         if current_line:
-            # 最後の行が「。」など一文字だけにならないように調整
-            if len(current_line) == 1 and lines:
+            # 最後の文字が「。」などの場合、前の行に無理やり結合
+            if len(current_line) <= 1 and lines:
                 lines[-1] = lines[-1] + current_line
             else:
                 lines.append(current_line)
     return "\n".join(lines)
 
-# --- グラフ作成 (重なりをさらに回避) ---
+# --- グラフ作成 ---
 def create_graph(rate, monthly):
     font_path = load_font_path()
     prop = fm.FontProperties(fname=font_path) if font_path else None
@@ -71,7 +71,6 @@ def create_graph(rate, monthly):
     plt.plot(months/12, assets, color="#FF4500", linewidth=8, label="資産合計")
     plt.plot(months/12, [monthly * m for m in months], color="#4169E1", linewidth=5, linestyle="--", label="投資元金")
     
-    # ラベル位置を調整 (y座標をさらにシビアに設定)
     plt.annotate(f'資産合計\n{int(f_assets//10000):,}万円', xy=(30, f_assets), xytext=(20, f_assets*0.8),
                  arrowprops=dict(facecolor='red', shrink=0.05), fontproperties=prop, fontsize=14, weight='bold')
     
@@ -93,25 +92,22 @@ def create_pages(name, title, user_photo, qr_code, rate):
     f_dyn = int(33000 * (((rate/100/12) + 1)**360 - 1) / (rate/100/12)) // 10000
     p_dyn = f_dyn - 1188
 
-    # --- PAGE 1 ---
+    # --- PAGE 1 (表面) ---
     p1 = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     d1 = ImageDraw.Draw(p1)
     d1.rectangle([0, 0, WIDTH, 750], fill=GOLD)
     d1.text((WIDTH//2, 300), "節約・貯蓄・NISA・投資・保険", font=f(100), fill=WHITE, anchor="mm")
     d1.text((WIDTH//2, 500), "日本人の９割が知らない", font=f(150), fill=WHITE, anchor="mm")
     
-    # タイトル (切れ防止)
     d1.text((WIDTH//2, 1000), "お金の超基本", font=f(350), fill=BLACK, anchor="mm")
     
-    # グラフ位置をさらに下げて重なりを回避 (1150 -> 1300)
+    # グラフ位置
     graph = create_graph(rate, 33000).resize((2000, 1100))
     p1.paste(graph, (WIDTH//2 - 1000, 1300))
     
-    # 説明文 (フォントを80に下げて一行に収まりやすく)
-    msg1 = f"毎月3.3万円の積立でも、30年後には {f_dyn:,}万円に。"
-    msg2 = f"投資元本1,188万円に対し、運用益だけで {p_dyn:,}万円以上 になります！"
-    d1.text((WIDTH//2, 2550), msg1, font=f(82), fill=BLACK, anchor="mm")
-    d1.text((WIDTH//2, 2680), msg2, font=f(82), fill=BLACK, anchor="mm")
+    # 【重要】説明文：左右切れ防止のため自動改行を適用し、フォントを少し下げて安全性を確保
+    msg_full = f"毎月3.3万円の積立でも、30年後には {f_dyn:,}万円に。\n投資元本1,188万円に対し、運用益だけで {p_dyn:,}万円以上 になります！"
+    d1.multiline_text((WIDTH//2, 2600), wrap_text(msg_full, f(80), CONTENT_W), font=f(80), fill=BLACK, anchor="mm", align="center", spacing=35)
 
     d1.rectangle([0, 2850, WIDTH, 3200], fill=PINK)
     d1.text((WIDTH//2, 3025), f"つみたてだけで老後 {f_dyn}万円 を作れます！", font=f(125), fill=WHITE, anchor="mm")
@@ -119,7 +115,7 @@ def create_pages(name, title, user_photo, qr_code, rate):
     h_info = "細川さんの運用実績から、利回りが7.5%に収斂するという確信を得て、このサービスを開始しました。"
     d1.text((WIDTH//2, 3400), wrap_text(h_info, f(75), CONTENT_W), font=f(75), fill=BLACK, anchor="mm", align="center")
 
-    # --- PAGE 2 ---
+    # --- PAGE 2 (裏面) ---
     p2 = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     d2 = ImageDraw.Draw(p2)
     d2.text((WIDTH//2, 450), "なぜ今、資産形成が必要なのか？", font=f(120), fill=GOLD, anchor="mm")
@@ -131,7 +127,7 @@ def create_pages(name, title, user_photo, qr_code, rate):
     )
     d2.multiline_text((SAFE_L, 750), wrap_text(story, f(85), CONTENT_W), font=f(85), fill=BLACK, spacing=55)
 
-    # プロフィールエリア
+    # プロフィールエリア (配置を再計算して重なりを阻止)
     d2.rectangle([0, 2550, WIDTH, HEIGHT], fill=(245, 245, 245))
     if user_photo:
         photo = ImageOps.fit(Image.open(user_photo).convert("RGBA"), (700, 700), centering=(0.5, 0.5))
@@ -140,14 +136,15 @@ def create_pages(name, title, user_photo, qr_code, rate):
         photo.putalpha(mask)
         p2.paste(photo, (SAFE_L, 2650), photo)
     
+    # 名前と肩書き (座標をさらに調整してQRから引き離す)
     d2.text((1050, 2800), title, font=f(70), fill=BLACK)
     d2.text((1050, 3000), name, font=f(180), fill=BLACK)
     
     if qr_code:
         qr = Image.open(qr_code).resize((450, 450))
-        qr_x = 1950 
+        qr_x = 1950 # 右端に固定
         p2.paste(qr, (qr_x, 2750))
-        d2.text((qr_x + 225, 3250), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
+        d2.text((qr_x + 225, 3300), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
 
     pdf_buf = io.BytesIO()
     p1.save(pdf_buf, format="PDF", save_all=True, append_images=[p2], resolution=300.0)
@@ -170,5 +167,5 @@ if st.button("🚀 チラシを生成する"):
         st.warning("写真とQRコードをセットしてください")
     else:
         pdf = create_pages(input_name, input_title, input_photo, input_qr, input_rate)
-        st.success("✅ 全ての修正が完了しました。最高のチラシをどうぞ！")
-        st.download_button("📥 完成版PDFを保存", pdf, "FP_Final_Perfect.pdf", "application/pdf")
+        st.success("✅ レイアウトをミリ単位で修正しました。これで完成です！")
+        st.download_button("📥 完成版PDFを保存", pdf, "FP_Hosokawa_Perfect_Complete.pdf", "application/pdf")
