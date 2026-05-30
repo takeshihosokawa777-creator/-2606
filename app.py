@@ -7,13 +7,9 @@ import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import numpy as np
 
-# --- 初期設定：エラー防止 ---
-user_photo = None
-qr_code = None
-
-# --- A4サイズ設定 (300dpi) ---
+# --- 設定：A4サイズ (300dpi) ---
 WIDTH, HEIGHT = 2480, 3508 
-SAFE_L, SAFE_R = 300, 2180 # 余白をさらに広く
+SAFE_L, SAFE_R = 300, 2180 
 CONTENT_W = SAFE_R - SAFE_L
 
 WHITE, GOLD, BLACK, RED, PINK = (255, 255, 255), (184, 134, 11), (30, 30, 30), (220, 0, 0), (255, 0, 127)
@@ -37,7 +33,7 @@ def get_font(size):
     except: pass
     return ImageFont.load_default()
 
-# --- 改行関数 (Pillow最新版対応) ---
+# --- 改行関数 (右端切れ・不自然な改行を防止) ---
 def wrap_text(text, font, max_width):
     lines = []
     for line in text.splitlines():
@@ -54,103 +50,122 @@ def wrap_text(text, font, max_width):
         lines.append(current_line)
     return "\n".join(lines)
 
-# --- グラフ作成 (重なり回避) ---
+# --- グラフ作成 (重なりを徹底回避) ---
 def create_graph(rate, monthly):
     font_path = load_font_path()
     prop = fm.FontProperties(fname=font_path) if font_path else None
-    plt.figure(figsize=(10, 6), dpi=150)
+    plt.figure(figsize=(10, 5.5), dpi=150) # 高さを少し抑えました
     months = np.arange(30 * 12 + 1)
     r = (rate / 100) / 12
     p_val = monthly * (30 * 12)
     assets = monthly * ((1 + r)**months - 1) / r if r > 0 else monthly * months
     f_assets = assets[-1]
+    
     plt.fill_between(months/12, assets, color="#FFD700", alpha=0.3)
-    plt.plot(months/12, assets, color="#FF4500", linewidth=8)
-    plt.plot(months/12, [monthly * m for m in months], color="#4169E1", linewidth=5, linestyle="--")
-    plt.annotate(f'資産合計\n{int(f_assets//10000):,}万円', xy=(30, f_assets), xytext=(20, f_assets*0.85),
+    plt.plot(months/12, assets, color="#FF4500", linewidth=8, label="資産合計")
+    plt.plot(months/12, [monthly * m for m in months], color="#4169E1", linewidth=5, linestyle="--", label="投資元金")
+    
+    # 資産合計ラベル (グラフのスケールに合わせ位置を微調整)
+    plt.annotate(f'資産合計\n{int(f_assets//10000):,}万円', xy=(30, f_assets), xytext=(20, f_assets*0.8),
                  arrowprops=dict(facecolor='red', shrink=0.05), fontproperties=prop, fontsize=14, weight='bold')
+    
     if rate != 7.5:
-        plt.text(20, f_assets*0.75, f"({rate}%で計算)", fontproperties=prop, fontsize=12, color="red")
+        plt.text(20, f_assets*0.7, f"({rate}%で計算)", fontproperties=prop, fontsize=12, color="red")
+
+    # 投資元金ラベル (重ならないように非常に低い位置に配置)
     plt.annotate(f'投資元金\n{int(p_val//10000):,}万円', xy=(30, p_val), xytext=(22, p_val*0.2),
                  arrowprops=dict(facecolor='blue', shrink=0.05), fontproperties=prop, fontsize=14)
+    
     plt.grid(True, linestyle=":", alpha=0.6)
     buf = io.BytesIO()
     plt.savefig(buf, format="png", bbox_inches='tight')
     plt.close()
     return Image.open(buf)
 
-# --- メイン画面 ---
-st.title("🚀 FPチラシ生成：最終確定・パーフェクト版")
-st.info("入力を画面の中央に配置しました。ここで情報を入力してください。")
-
-# 入力項目（メイン画面に移動）
-col_a, col_b = st.columns(2)
-with col_a:
-    name = st.text_input("お名前", "細川 豪")
-    title = st.text_input("肩書き", "ファイナンシャルプランナー")
-with col_b:
-    user_photo = st.file_uploader("顔写真", type=['jpg', 'png'])
-    qr_code = st.file_uploader("LINE QRコード", type=['jpg', 'png'])
-
-rate = st.select_slider("シミュレーション利回り (%)", options=[7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 11.0, 12.0, 13.0], value=7.5)
-
-# 計算用
-f_man_dyn = int(33000 * (((rate/100/12) + 1)**360 - 1) / (rate/100/12)) // 10000
-p_man_dyn = f_man_dyn - 1188
-
-def create_pages():
+# --- ページ生成 ---
+def create_pages(name, title, user_photo, qr_code, rate):
     f = get_font
+    f_man_dyn = int(33000 * (((rate/100/12) + 1)**360 - 1) / (rate/100/12)) // 10000
+    p_man_dyn = f_man_dyn - 1188
+
     # --- PAGE 1 ---
     p1 = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     d1 = ImageDraw.Draw(p1)
     d1.rectangle([0, 0, WIDTH, 750], fill=GOLD)
     d1.text((WIDTH//2, 300), "節約・貯蓄・NISA・投資・保険", font=f(100), fill=WHITE, anchor="mm")
     d1.text((WIDTH//2, 500), "日本人の９割が知らない", font=f(150), fill=WHITE, anchor="mm")
+    
+    # タイトル
     d1.text((WIDTH//2, 1000), "お金の超基本", font=f(350), fill=BLACK, anchor="mm")
-    graph = create_graph(rate, 33000).resize((2000, 1200))
-    p1.paste(graph, (WIDTH//2 - 1000, 1250))
+    
+    # グラフ (重なり防止のためサイズと位置を最適化)
+    graph = create_graph(rate, 33000).resize((2000, 1100))
+    p1.paste(graph, (WIDTH//2 - 1000, 1150))
+    
+    # 1枚目説明文 (改行を整理)
     msg1 = f"毎月3.3万円の積立でも、30年後には {f_man_dyn:,}万円 に。\n投資元本1,188万円に対し、運用益だけで {p_man_dyn:,}万円以上 になります！"
-    d1.multiline_text((WIDTH//2, 2600), wrap_text(msg1, f(85), CONTENT_W), font=f(85), fill=BLACK, anchor="mm", align="center", spacing=30)
-    d1.rectangle([0, 2850, WIDTH, 3200], fill=PINK)
-    d1.text((WIDTH//2, 3025), f"つみたてだけで老後 {f_man_dyn}万円 を作れます！", font=f(125), fill=WHITE, anchor="mm")
+    d1.multiline_text((WIDTH//2, 2500), wrap_text(msg1, f(85), CONTENT_W), font=f(85), fill=BLACK, anchor="mm", align="center", spacing=30)
+
+    d1.rectangle([0, 2800, WIDTH, 3150], fill=PINK)
+    d1.text((WIDTH//2, 2975), f"つみたてだけで老後 {f_man_dyn}万円 を作れます！", font=f(125), fill=WHITE, anchor="mm")
+    
     h_info = "細川さんの運用実績から、利回りが7.5%に収斂するという確信を得て、このサービスを開始しました。"
-    d1.text((WIDTH//2, 3400), wrap_text(h_info, f(75), CONTENT_W), font=f(75), fill=BLACK, anchor="mm", align="center")
+    d1.text((WIDTH//2, 3350), wrap_text(h_info, f(75), CONTENT_W), font=f(75), fill=BLACK, anchor="mm", align="center")
 
     # --- PAGE 2 ---
     p2 = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
     d2 = ImageDraw.Draw(p2)
-    d2.text((WIDTH//2, 350), "なぜ今、資産形成が必要なのか？", font=f(120), fill=GOLD, anchor="mm")
+    # 上部切れ防止のため Y=450 に下げ
+    d2.text((WIDTH//2, 450), "なぜ今、資産形成が必要なのか？", font=f(120), fill=GOLD, anchor="mm")
+    
     story = (
         "過去20年間を振り返れば、ITバブル、リーマンショック、コロナショックと多くの暴落がありましたが、長期投資はそれらを乗り越える力があります。\n\n"
-        f"私は自らの運用実績を通じ、長期利回りが7.5%へと収斂していく事実を目の当たりにしました。毎月3.3万円の積立が、30年後には4446万円、つまり元本から3258万円以上の純利益を生み出す。この実体験に基づいた確信が私の原動力です。\n\n"
+        "私は自らの運用実績を通じ、長期利回りが7.5%へと収斂していく事実を目の当たりにしました。毎月3.3万円の積立が、30年後には4446万円、つまり元本から3258万円以上の純利益を生み出す。この実体験に基づいた確信が私の原動力です。\n\n"
         "これぞ複利の効果であり、「複利が起こす奇跡の価値」と呼ばれるものです。正しいつみたてを知り、新NISAやiDeCoを賢く活用することで、家族が安心して暮らせる未来を共に作っていきましょう。"
     )
-    d2.multiline_text((SAFE_L, 600), wrap_text(story, f(85), CONTENT_W), font=f(85), fill=BLACK, spacing=45)
-    d2.rectangle([0, 2550, WIDTH, HEIGHT], fill=(245, 245, 245))
+    d2.multiline_text((SAFE_L, 750), wrap_text(story, f(85), CONTENT_W), font=f(85), fill=BLACK, spacing=55)
+
+    # プロフィールエリア (重なり徹底排除)
+    d2.rectangle([0, 2450, WIDTH, HEIGHT], fill=(245, 245, 245))
     if user_photo:
         photo = ImageOps.fit(Image.open(user_photo).convert("RGBA"), (700, 700), centering=(0.5, 0.5))
         mask = Image.new("L", (700, 700), 0)
         ImageDraw.Draw(mask).ellipse((0, 0, 700, 700), fill=255)
         photo.putalpha(mask)
-        p2.paste(photo, (SAFE_L, 2650), photo)
-    d2.text((1050, 2800), title, font=f(70), fill=BLACK)
-    d2.text((1050, 3000), name, font=f(180), fill=BLACK)
+        p2.paste(photo, (SAFE_L, 2550), photo)
+    
+    # テキスト (写真のすぐ右、QRから遠ざける)
+    d2.text((1050, 2750), title, font=f(70), fill=BLACK)
+    d2.text((1050, 2950), name, font=f(180), fill=BLACK)
+    
+    # QRコード (右端 X=1950 に完全固定)
     if qr_code:
         qr = Image.open(qr_code).resize((450, 450))
-        qr_x = 1850 
-        p2.paste(qr, (qr_x, 2750))
-        d2.text((qr_x + 225, 3250), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
+        qr_x = 1950 
+        p2.paste(qr, (qr_x, 2600))
+        d2.text((qr_x + 225, 3150), "公式LINEはこちら", font=f(65), fill=BLACK, anchor="mm")
 
     pdf_buf = io.BytesIO()
     p1.save(pdf_buf, format="PDF", save_all=True, append_images=[p2], resolution=300.0)
     return pdf_buf.getvalue()
 
-st.divider()
+# --- アプリ ---
+st.title("📄 FPチラシ生成：最終確定パーフェクト版")
+col_a, col_b = st.columns(2)
+with col_a:
+    input_name = st.text_input("お名前", "細川 豪")
+    input_title = st.text_input("肩書き", "ファイナンシャルプランナー")
+with col_b:
+    input_photo = st.file_uploader("顔写真", type=['jpg', 'png'])
+    input_qr = st.file_uploader("LINE QRコード", type=['jpg', 'png'])
+
+input_rate = st.select_slider("利回り (%)", options=[7.5, 8.0, 8.5, 9.0, 9.5, 10.0, 11.0, 12.0, 13.0], value=7.5)
+
 if st.button("🚀 チラシを生成する"):
-    if not user_photo or not qr_code:
-        st.warning("⚠️ 画面上の『顔写真』と『LINE QRコード』の枠をクリックして、ファイルをセットしてください。")
+    if not input_photo or not input_qr:
+        st.warning("写真とQRコードをセットしてください")
     else:
-        with st.spinner("最高品質のチラシを生成中..."):
-            pdf = create_pages()
-            st.success("✅ 全てのレイアウト修正を完了しました！")
-            st.download_button("📥 完成したPDFを保存", pdf, f"FP_Perfect_Flyer.pdf", "application/pdf")
+        with st.spinner("プロ品質のチラシを生成中..."):
+            pdf = create_pages(input_name, input_title, input_photo, input_qr, input_rate)
+            st.success("✅ 全ての修正を反映しました！これで完成です。")
+            st.download_button("📥 完成したPDFを保存", pdf, "FP_Hosokawa_Perfect_Flyer.pdf", "application/pdf")
