@@ -21,7 +21,7 @@ WHITE, GOLD, BLACK, RED, PINK = (255, 255, 255), (184, 134, 11), (30, 30, 30), (
 @st.cache_resource
 def load_font_path():
     font_filename = "NotoSansJP-Bold.ttf"
-    url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/Variable/OTC/NotoSansCJKjp-Bold.otf"
+    url = "https://github.com/googlefonts/noto-cjk/raw/main/Sans/OTF/Japanese/NotoSansCJKjp-Bold.otf"
     if not os.path.exists(font_filename):
         try:
             response = requests.get(url, timeout=30)
