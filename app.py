@@ -3,6 +3,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 import io
 import os
 import requests
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import numpy as np
