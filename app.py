@@ -105,7 +105,7 @@ def create_pages(name, title, user_photo, qr_code, rate):
     d1.text((WIDTH//2, 3025), f"つみたてだけで老後 {f_dyn}万円 を作れます！", font=f(125), fill=WHITE, anchor="mm")
     
     # 1枚目下部：自動改行を適用
-    h_info = f"{name}さんの運用実績から、利回りが7.5%に収斂するという確信を得て、このサービスを開始しました。"
+    h_info = "細川さんの運用実績から、利回りが7.5%に収斂するという確信を得て、このサービスを開始しました。"
     d1.multiline_text((WIDTH//2, 3400), wrap_text(h_info, f(70), CONTENT_W), font=f(70), fill=BLACK, anchor="mm", align="center")
 
     # --- PAGE 2 ---
